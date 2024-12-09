@@ -85,9 +85,9 @@ rule hg38:
     input:
         "data/hg38/ncbi_dataset/fetch.txt",
     output:
-        "data/hg38/ncbi_dataset/data/GCF_000001405.40/GCF_000001405.40_GRCh38.p14_genomic.fna",
-        "data/hg38/ncbi_dataset/data/GCF_000001405.40/genomic.gff",
-        "data/hg38/ncbi_dataset/data/GCF_000001405.40/rna.fna",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/{HG38FNA}",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/genomic.gff",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/rna.fna",
     log:
         stdout="logs/datasets/hg38.stdout.log",
         stderr="logs/datasets/hg38.stderr.log",
