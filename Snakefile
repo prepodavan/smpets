@@ -1,11 +1,14 @@
 import pathlib as pl
 
 
+HG38ACC = "GCF_000001405.40"
+HG38FNA = "GCF_000001405.40_GRCh38.p14_genomic.fna"
 SAMPLES = [
     f.name.replace(".fastq.gz", "") for f in pl.Path("data/orig/dna_reads").iterdir()
 ]
 SAMPLEIDS = set([s[:-2] for s in SAMPLES])
 TRIMMED = list()
+HISAT_INDEXES = [f"data/hisat/index.{i}.ht2" for i in range(1, 9)]
 
 for sample in SAMPLEIDS:
     TRIMMED.append(f"{sample}.1.forward.paired")
@@ -17,6 +20,17 @@ for sample in SAMPLEIDS:
 rule all:
     input:
         *[f"data/trim/dna_reads/{tr}.fastq.gz" for tr in TRIMMED],
+        "data/hg38/README.md",
+        "data/hg38/md5sum.txt",
+        "data/hg38/ncbi_dataset/fetch.txt",
+        "data/hg38/ncbi_dataset/data/dataset_catalog.json",
+        "data/hg38/ncbi_dataset/data/assembly_data_report.jsonl",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/{HG38FNA}",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/genomic.gff",
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/rna.fna",
+        f"data/faidx/{HG38FNA[:-4]}.fai",
+        "data/faidx/rna.fai",
+        *HISAT_INDEXES,
         expand(
             "data/qc/fastqc/orig/{sample}_fastqc.{ext}",
             sample=SAMPLES,
@@ -28,6 +42,92 @@ rule all:
             ext=["zip", "html"],
         ),
         "data/qc/multiqc/multiqc_report.html",
+
+
+rule hg38_dehydrated:
+    output:
+        "data/hg38/README.md",
+        "data/hg38/md5sum.txt",
+        "data/hg38/ncbi_dataset/fetch.txt",
+        "data/hg38/ncbi_dataset/data/dataset_catalog.json",
+        "data/hg38/ncbi_dataset/data/assembly_data_report.jsonl",
+    log:
+        stdout="logs/datasets/hg38dehydrated.stdout.log",
+        stderr="logs/datasets/hg38dehydrated.stderr.log",
+    threads: 1
+    shell:
+        "datasets download genome accession "
+        f"{HG38ACC} "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "--include genome,gff3,rna,seq-report "
+        "--reference "
+        "--no-progressbar "
+        "--filename data/hg38.zip "
+        "--dehydrated "
+        "&& unzip "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "-o -d data/hg38 data/hg38.zip  "
+        "&& rm data/hg38.zip"
+
+
+rule hg38:
+    input:
+        "data/hg38/ncbi_dataset/fetch.txt",
+    output:
+        "data/hg38/ncbi_dataset/data/GCF_000001405.40/GCF_000001405.40_GRCh38.p14_genomic.fna",
+        "data/hg38/ncbi_dataset/data/GCF_000001405.40/genomic.gff",
+        "data/hg38/ncbi_dataset/data/GCF_000001405.40/rna.fna",
+    log:
+        stdout="logs/datasets/hg38.stdout.log",
+        stderr="logs/datasets/hg38.stderr.log",
+    threads: 5
+    shell:
+        "datasets rehydrate "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "--max-workers {threads} "
+        "--no-progressbar "
+        "--directory data/hg38"
+
+
+rule faidx:
+    input:
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/{{ref}}.fna",
+    output:
+        "data/faidx/{ref}.fai",
+    log:
+        stdout="logs/faidx/{ref}.stdout.log",
+        stderr="logs/faidx/{ref}.stderr.log",
+    threads: 1
+    shell:
+        "samtools faidx "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "--threads {threads} "
+        "--fai-idx {output} "
+        "{input}"
+
+
+rule hisat2_build:
+    input:
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/{HG38FNA}",
+    output:
+        *HISAT_INDEXES,
+    threads: 8
+    resources:
+        mem_mb=1024,
+    log:
+        stdout="logs/hisat/index.stdout.log",
+        stderr="logs/hisat/index.stderr.log",
+    shell:
+        "hisat2-build "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "--threads {threads} "
+        "{input} "
+        "data/hisat/index"
 
 
 rule trimmomatic_pe:
