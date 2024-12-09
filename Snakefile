@@ -16,10 +16,12 @@ for sample in SAMPLEIDS:
     TRIMMED.append(f"{sample}.2.reverse.paired")
     TRIMMED.append(f"{sample}.2.reverse.unpaired")
 
+TRIMMED_FILES = [f"data/trim/dna_reads/{tr}.fastq.gz" for tr in TRIMMED]
+
 
 rule all:
     input:
-        *[f"data/trim/dna_reads/{tr}.fastq.gz" for tr in TRIMMED],
+        *TRIMMED_FILES,
         "data/hg38/README.md",
         "data/hg38/md5sum.txt",
         "data/hg38/ncbi_dataset/fetch.txt",
@@ -41,6 +43,13 @@ rule all:
             sample=TRIMMED,
             ext=["zip", "html"],
         ),
+        expand("data/hisat/mapping/{sample}/metrics.txt", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.txt", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.bam", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.bam.bai", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.flagstat", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.samstats", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.bamstats", sample=SAMPLEIDS),
         "data/qc/multiqc/multiqc_report.html",
 
 
@@ -157,6 +166,106 @@ rule trimmomatic_pe:
         "TRAILING:20 MINLEN:50"
 
 
+rule hisat2_refmap:
+    input:
+        *HISAT_INDEXES,
+        fw="data/trim/dna_reads/{sample}.1.forward.paired.fastq.gz",
+        rv="data/trim/dna_reads/{sample}.2.reverse.paired.fastq.gz",
+    output:
+        met="data/hisat/mapping/{sample}/metrics.txt",
+        sum="data/hisat/mapping/{sample}/{sample}.txt",
+        bam="data/hisat/mapping/{sample}/{sample}.bam",
+        samsorttmp=temp(directory("data/samtools.sort.tmp.d/{sample}.d/")),
+    threads: 20
+    resources:
+        mem_mb=1024,
+    log:
+        stderr="logs/hisat/mapping/{sample}/stderr.log",
+        samsort="logs/hisat/mapping/{sample}/samsort.stderr.log",
+    shell:
+        "mkdir -p {output.samsorttmp} && "
+        "hisat2 "
+        "2> {log.stderr} "
+        "--fr "
+        "--threads {threads} "
+        "--time "
+        "--no-spliced-alignment "
+        "--met-file {output.met} "
+        "--summary-file {output.sum} "
+        "-x data/hisat/index "
+        "-1 {input.fw} "
+        "-2 {input.rv} | "
+        "samtools sort "
+        "-@ {threads} "
+        "-O BAM "
+        "-o {output.bam} "
+        "-T {output.samsorttmp}/tmp "
+        "2> {log.samsort}"
+
+
+rule hisat2_refmap_samindex:
+    input:
+        "data/hisat/mapping/{sample}/{sample}.bam",
+    output:
+        "data/hisat/mapping/{sample}/{sample}.bam.bai",
+    threads: 5
+    log:
+        "logs/hisat/mapping/{sample}/samindex.stderr.log",
+    shell:
+        "samtools index "
+        "2> {log} "
+        "-@ {threads} "
+        "--output {output} "
+        "{input}"
+
+
+rule hisat2_refmap_samstats:
+    input:
+        "data/hisat/mapping/{sample}/{sample}.bam",
+    output:
+        "data/hisat/mapping/{sample}/{sample}.samstats",
+    threads: 5
+    log:
+        "logs/hisat/mapping/{sample}/samstats.stderr.log",
+    shell:
+        "samtools stats "
+        "2> {log} "
+        "-@ {threads} "
+        "> {output} "
+        "{input}"
+
+
+rule hisat2_refmap_flagstat:
+    input:
+        "data/hisat/mapping/{sample}/{sample}.bam",
+    output:
+        "data/hisat/mapping/{sample}/{sample}.flagstat",
+    threads: 5
+    log:
+        "logs/hisat/mapping/{sample}/flagstat.stderr.log",
+    shell:
+        "samtools flagstat "
+        "2> {log} "
+        "-@ {threads} "
+        "> {output} "
+        "{input}"
+
+
+rule hisat2_refmap_bamstats:
+    input:
+        "data/hisat/mapping/{sample}/{sample}.bam",
+    output:
+        "data/hisat/mapping/{sample}/{sample}.bamstats",
+    threads: 1
+    log:
+        "logs/hisat/mapping/{sample}/bamstats.stderr.log",
+    shell:
+        "bamtools stats "
+        "2> {log} "
+        "> {output} "
+        "-in {input}"
+
+
 rule fastqc:
     input:
         "data/{src}/dna_reads/{sample}.fastq.gz",
@@ -182,6 +291,10 @@ rule multiqc:
         expand(
             "logs/trim/{sample}.{std}.log", std=["stdout", "stderr"], sample=SAMPLEIDS
         ),
+        expand("data/hisat/mapping/{sample}/{sample}.txt", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.flagstat", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.bamstats", sample=SAMPLEIDS),
+        expand("data/hisat/mapping/{sample}/{sample}.samstats", sample=SAMPLEIDS),
     output:
         "data/qc/multiqc/multiqc_report.html",
         directory("data/qc/multiqc/multiqc_data"),
@@ -189,6 +302,8 @@ rule multiqc:
     log:
         stdout="logs/multiqc/stdout.log",
         stderr="logs/multiqc/stderr.log",
+    params:
+        refmap=expand("data/hisat/mapping/{sample}", sample=sorted(SAMPLEIDS)),
     shell:
         "multiqc "
         "> {log.stdout} "
@@ -201,3 +316,4 @@ rule multiqc:
         "data/qc/fastqc/orig/ "
         "data/qc/fastqc/trim/ "
         "logs/trim/ "
+        "{params.refmap} "
