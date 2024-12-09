@@ -50,7 +50,75 @@ rule all:
         expand("data/hisat/mapping/{sample}/{sample}.flagstat", sample=SAMPLEIDS),
         expand("data/hisat/mapping/{sample}/{sample}.samstats", sample=SAMPLEIDS),
         expand("data/hisat/mapping/{sample}/{sample}.bamstats", sample=SAMPLEIDS),
+        expand("data/hg38.bcf.d/{sample}/{sample}.bcf", sample=SAMPLEIDS),
+        expand("data/hg38.bcf.d/{sample}/{sample}.bcfstats", sample=SAMPLEIDS),
+        expand("data/hg38.bcf.d/{sample}/{sample}.bcf.csi", sample=SAMPLEIDS),
         "data/qc/multiqc/multiqc_report.html",
+
+
+rule calling:
+    input:
+        ref=f"data/hg38/ncbi_dataset/data/{HG38ACC}/{HG38FNA}",
+        bam="data/hisat/mapping/{sample}/{sample}.bam",
+    output:
+        "data/hg38.bcf.d/{sample}/{sample}.bcf"
+    log:
+        mpileup="logs/hg38.bcf/{sample}/mpileup.log",
+        callerr="logs/hg38.bcf/{sample}/calls.log",
+        filter="logs/hg38.bcf/{sample}/filter.log",
+    threads: 5
+    shell:
+        "mkdir -p data/hg38.bcf.d && "
+        "bcftools mpileup "
+        "--threads {threads} "
+        "2> {log.mpileup} "
+        "--max-depth 1500 "
+        "--fasta-ref {input.ref} "
+        "{input.bam} | "
+        "bcftools call "
+        "--threads {threads} "
+        "2> {log.callerr} "
+        "--multiallelic-caller "
+        "--variants-only | "
+        "bcftools filter "
+        "2> {log.filter} "
+        "--threads {threads} "
+        "--include 'QUAL>30 && DP>50' "
+        "--output {output} "
+
+
+rule calls_stats:
+    input:
+        "data/hg38.bcf.d/{sample}/{sample}.bcf"
+    output:
+        "data/hg38.bcf.d/{sample}/{sample}.bcfstats"
+    log:
+        "logs/hg38.bcf/{sample}/stats.log",
+    threads: 5
+    shell:
+        "bcftools stats "
+        "--threads {threads} "
+        "2> {log} "
+        "{input} | "
+        "sed \"s|{input}|$(echo {input} | cut -d '/' -f 4 | cut -d '.' -f 1)|g\" " # need for multiqc
+        "> {output} "
+
+
+rule calls_index:
+    input:
+        "data/hg38.bcf.d/{sample}/{sample}.bcf"
+    output:
+        "data/hg38.bcf.d/{sample}/{sample}.bcf.csi"
+    log:
+        "logs/hg38.bcf/{sample}/index.log",
+    threads: 5
+    shell:
+        "bcftools index "
+        "--csi "
+        "--threads {threads} "
+        "2> {log} "
+        "--output {output} "
+        "{input}"
 
 
 rule hg38_dehydrated:
@@ -295,6 +363,7 @@ rule multiqc:
         expand("data/hisat/mapping/{sample}/{sample}.flagstat", sample=SAMPLEIDS),
         expand("data/hisat/mapping/{sample}/{sample}.bamstats", sample=SAMPLEIDS),
         expand("data/hisat/mapping/{sample}/{sample}.samstats", sample=SAMPLEIDS),
+        expand("data/hg38.bcf.d/{sample}/{sample}.bcfstats", sample=SAMPLEIDS),
     output:
         "data/qc/multiqc/multiqc_report.html",
         directory("data/qc/multiqc/multiqc_data"),
@@ -304,6 +373,7 @@ rule multiqc:
         stderr="logs/multiqc/stderr.log",
     params:
         refmap=expand("data/hisat/mapping/{sample}", sample=sorted(SAMPLEIDS)),
+        bcf=expand("data/hg38.bcf.d/{sample}", sample=sorted(SAMPLEIDS)),
     shell:
         "multiqc "
         "> {log.stdout} "
@@ -316,4 +386,5 @@ rule multiqc:
         "data/qc/fastqc/orig/ "
         "data/qc/fastqc/trim/ "
         "logs/trim/ "
+        "{params.bcf} "
         "{params.refmap} "
