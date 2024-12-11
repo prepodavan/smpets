@@ -204,7 +204,68 @@ rule all:
             f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bcf.csi",
             sample=SAMPLEIDS,
         ),
+        expand(
+            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vcf",
+            sample=SAMPLEIDS,
+        ),
+        expand(
+            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vep.html",
+            sample=SAMPLEIDS,
+        ),
         "data/qc/multiqc/multiqc_report.html",
+
+
+rule tabix:
+    input:
+        f"data/hg38/ncbi_dataset/data/{HG38ACC}/genomic.gff",
+    output:
+        "data/hg38.genomic.gff.bgz",
+        "data/hg38.genomic.gff.bgz.tbi",
+    log:
+        "logs/tabix.log",
+    shell:
+        'grep -v "#" {input} | '
+        "sort -k1,1 -k4,4n -k5,5n -t$'\\t' | "
+        "bgzip -c > {output} 2> {log} && "
+        "tabix -p gff {output} 2> {log}"
+
+
+rule vep:
+    input:
+        gff="data/hg38.genomic.gff.bgz",
+        tbi="data/hg38.genomic.gff.bgz.tbi",
+        bcf="data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf",
+        fna=f"data/hg38/ncbi_dataset/data/{HG38ACC}/{{fna}}",
+    output:
+        calls="data/vep/{tool}/{mol}/{fna}/{sample}/{sample}.vcf",
+        stats="data/vep/{tool}/{mol}/{fna}/{sample}/{sample}.vep.html",
+        vcfin=temp("data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.vcf"),
+    log:
+        stdout="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.stdout.log",
+        stderr="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.stderr.log",
+        convert_input_stdout="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.convert.input.stdout.log",
+        convert_input_stderr="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.convert.input.stderr.log",
+    threads: 10
+    shell:
+        "bcftools convert "
+        "> {log.convert_input_stdout} "
+        "2> {log.convert_input_stderr} "
+        "--threads {threads} "
+        "--output-type v "
+        "--output {output.vcfin} "
+        "{input.bcf} && "
+        "vep "
+        "> {log.stdout} "
+        "2> {log.stderr} "
+        "--fork {threads} "
+        "--force_overwrite "
+        "--everything "
+        "--stats_html "
+        "--fasta {input.fna} "
+        "--gff {input.gff} "
+        "--stats_file {output.stats} "
+        "--input_file {output.vcfin} "
+        "--output_file {output.calls} "
 
 
 rule calling:
@@ -685,6 +746,10 @@ rule multiqc:
             f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.bcfstats",
             sample=SAMPLEIDS,
         ),
+        expand(
+            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vep.html",
+            sample=SAMPLEIDS,
+        ),
     output:
         "data/qc/multiqc/multiqc_report.html",
         directory("data/qc/multiqc/multiqc_data"),
@@ -721,6 +786,10 @@ rule multiqc:
             tool=["hisat", "mapping.filtered"],
             sample=sorted(RNAs),
         ),
+        vep=expand(
+            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}",
+            sample=SAMPLEIDS,
+        ),
     shell:
         "multiqc "
         "> {log.stdout} "
@@ -740,3 +809,4 @@ rule multiqc:
         "{params.bcf_rna} "
         "{params.refmap_dna} "
         "{params.refmap_rna} "
+        "{params.vep} "

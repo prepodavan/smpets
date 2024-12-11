@@ -9,3 +9,6 @@ osx-arm:
 	conda config --env --set subdir osx-64
 	conda config --set channel_priority flexible
 
+.PHONY: PerlBio
+PerlBio:
+	cpanm -n Bio::Perl
