@@ -4,10 +4,12 @@ import pathlib as pl
 HG38ACC = "GCF_000001405.40"
 HG38FNA = "GCF_000001405.40_GRCh38.p14_genomic.fna"
 SAMPLES = [
-    f.name.replace(".fastq.gz", "") for f in pl.Path("data/orig/dna_reads").iterdir()
+    f.name.replace(".fastq.gz", "")
+    for f in pl.Path("data/orig/dna_reads").glob("*.fastq.gz")
 ]
 RNAs = [
-    f.name.replace(".fastq.gz", "") for f in pl.Path("data/orig/rna_reads").iterdir()
+    f.name.replace(".fastq.gz", "")
+    for f in pl.Path("data/orig/rna_reads").glob("*.fastq.gz")
 ]
 SAMPLEIDS = set([s[:-2] for s in SAMPLES])
 PAIRED = SAMPLEIDS
@@ -27,190 +29,92 @@ rule all:
         f"data/hg38/ncbi_dataset/data/{HG38ACC}/{HG38FNA}.fai",
         *[f"data/hisat/index/{HG38FNA}/index.{i}.ht2" for i in range(1, 9)],
         *[f"data/hisat/index/rna.fna/index.{i}.ht2" for i in range(1, 9)],
+        # dna
         expand(
-            "data/qc/fastqc/orig/dna_reads/{sample}_fastqc.{ext}",
-            sample=SAMPLES,
+            "data/orig/dna_reads/{sample}/{sample}_{mate}_fastqc.{ext}",
+            sample=SAMPLEIDS,
+            mate=["1", "2"],
             ext=["zip", "html"],
         ),
         expand(
-            "data/qc/fastqc/trim/dna_reads/{sample}/{sample}.{dir}{pair}_fastqc.{ext}",
+            "data/orig/dna_reads/{sample}/{sample}.{dir}{pair}{ext}",
             sample=SAMPLEIDS,
             dir=["f", "r"],
             pair=["p", "u"],
-            ext=["zip", "html"],
+            ext=[
+                ".fastq.gz",
+                "_fastqc.zip",
+                "_fastqc.html",
+            ],
         ),
         expand(
-            "data/qc/fastqc/trim/rna_reads/{sample}/{sample}.se_fastqc.{ext}",
+            f"data/orig/dna_reads/{{sample}}/{HG38FNA}/{{sample}}.{{tool}}",
+            sample=SAMPLEIDS,
+            tool=[
+                "hisat_metrics.txt",
+                "txt",
+            ],
+        ),
+        expand(
+            f"data/orig/dna_reads/{{sample}}/{HG38FNA}/{{sample}}{{filter}}.{{tool}}",
+            sample=SAMPLEIDS,
+            filter=[
+                "",
+                ".filtered",
+            ],
+            tool=[
+                "bam",
+                "bam.bai",
+                "flagstat",
+                "samstats",
+                "bamstats",
+                "bcf",
+                "bcfstats",
+                "vcf",
+                "vep.html",
+            ],
+        ),
+        # rna
+        expand(
+            "data/orig/rna_reads/{sample}/{sample}_fastqc.{ext}",
             sample=RNAs,
             ext=["zip", "html"],
         ),
         expand(
-            "data/qc/fastqc/orig/rna_reads/{sample}_fastqc.{ext}",
+            "data/orig/rna_reads/{sample}/{sample}.se{ext}",
             sample=RNAs,
-            ext=["zip", "html"],
+            ext=[
+                ".fastq.gz",
+                "_fastqc.zip",
+                "_fastqc.html",
+            ],
         ),
         expand(
-            "data/trim/dna_reads/{sample}/{sample}.{dir}{pair}.fastq.gz",
-            sample=SAMPLEIDS,
-            dir=["f", "r"],
-            pair=["p", "u"],
-        ),
-        expand(
-            "data/trim/rna_reads/{sample}/{sample}.se.fastq.gz",
+            "data/orig/rna_reads/{sample}/rna.fna/{sample}.{tool}",
             sample=RNAs,
+            tool=[
+                "hisat_metrics.txt",
+                "txt",
+            ],
         ),
         expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/metrics.txt",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.txt",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bam",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bam.bai",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.flagstat",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.samstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.bamstats",
-            sample=SAMPLEIDS,
-        ),
-        expand("data/hisat/mapping/rna_reads/rna.fna/{sample}/metrics.txt", sample=RNAs),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.txt",
+            "data/orig/rna_reads/{sample}/rna.fna/{sample}{filter}.{tool}",
             sample=RNAs,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.bam",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.bam.bai",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.flagstat",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.samstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.bamstats",
-            sample=RNAs,
-        ),
-        expand(
-            f"data/hg38.bcf.d/hisat/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bcf",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/hisat/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.bcfstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/hisat/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bcf.csi",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            "data/hg38.bcf.d/hisat/rna_reads/rna.fna/{sample}/{sample}.bcf",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/hisat/rna_reads/rna.fna/{sample}/{sample}.hisat.bcfstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/hisat/rna_reads/rna.fna/{sample}/{sample}.bcf.csi",
-            sample=RNAs,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bam",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.bam",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.bam.bai",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.flagstat",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.samstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.bamstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/mapping.filtered/rna_reads/rna.fna/{sample}/{sample}.bcf",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/mapping.filtered/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.bcfstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/mapping.filtered/rna_reads/rna.fna/{sample}/{sample}.bcf.csi",
-            sample=RNAs,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bam",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bam.bai",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.flagstat",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.samstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.bamstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bcf",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.bcfstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.bcf.csi",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vcf",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vep.html",
-            sample=SAMPLEIDS,
+            filter=[
+                "",
+                ".filtered",
+            ],
+            tool=[
+                "bam",
+                "bam.bai",
+                "flagstat",
+                "samstats",
+                "bamstats",
+                "bcf",
+                "bcfstats",
+                "vcf",
+                "vep.html",
+            ],
         ),
         "data/qc/multiqc/multiqc_report.html",
 
@@ -234,17 +138,17 @@ rule vep:
     input:
         gff="data/hg38.genomic.gff.bgz",
         tbi="data/hg38.genomic.gff.bgz.tbi",
-        bcf="data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf",
+        bcf="{sample_dir}/{fna}/{sample}.bcf",
         fna=f"data/hg38/ncbi_dataset/data/{HG38ACC}/{{fna}}",
     output:
-        calls="data/vep/{tool}/{mol}/{fna}/{sample}/{sample}.vcf",
-        stats="data/vep/{tool}/{mol}/{fna}/{sample}/{sample}.vep.html",
-        vcfin=temp("data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.vcf"),
+        calls="{sample_dir}/{fna}/{sample}.vcf",
+        stats="{sample_dir}/{fna}/{sample}.vep.html",
+        vcfin=temp("data/hg38.bcf.d/{sample_dir}/{fna}/{sample}.vcf"),
     log:
-        stdout="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.stdout.log",
-        stderr="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.stderr.log",
-        convert_input_stdout="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.convert.input.stdout.log",
-        convert_input_stderr="logs/vep/{tool}/{mol}/{fna}/{sample}/{sample}.convert.input.stderr.log",
+        stdout="logs/vep/{sample_dir}/{fna}/{sample}.vcf.stdout.log",
+        stderr="logs/vep/{sample_dir}/{fna}/{sample}.vcf.stderr.log",
+        convert_input_stdout="logs/vep/{sample_dir}/{fna}/{sample}.vcf.convert.input.stdout.log",
+        convert_input_stderr="logs/vep/{sample_dir}/{fna}/{sample}.vcf.convert.input.stderr.log",
     threads: 10
     shell:
         "bcftools convert "
@@ -271,13 +175,13 @@ rule vep:
 rule calling:
     input:
         ref=f"data/hg38/ncbi_dataset/data/{HG38ACC}/{{fna}}",
-        bam="data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        bam="{sample_dir}/{fna}/{sample}.bam",
     output:
-        "data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf",
+        "{sample_dir}/{fna}/{sample}.bcf",
     log:
-        mpileup="logs/hg38.bcf/{tool}/{mol}/{fna}/{sample}/mpileup.log",
-        callerr="logs/hg38.bcf/{tool}/{mol}/{fna}/{sample}/calls.log",
-        filter="logs/hg38.bcf/{tool}/{mol}/{fna}/{sample}/filter.log",
+        mpileup="logs/calling/{sample_dir}/{fna}/{sample}/mpileup.log",
+        callerr="logs/calling/{sample_dir}/{fna}/{sample}/calls.log",
+        filter="logs/calling/{sample_dir}/{fna}/{sample}/filter.log",
     threads: 5
     shell:
         "mkdir -p data/hg38.bcf.d && "
@@ -301,11 +205,11 @@ rule calling:
 
 rule calls_stats:
     input:
-        "data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf",
+        "{sample}.bcf",
     output:
-        "data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.{tool}.bcfstats",
+        "{sample}.bcfstats",
     log:
-        "logs/hg38.bcf/{tool}/{mol}/{fna}/{sample}/stats.log",
+        "logs/calling/{sample}/stats.log",
     threads: 5
     # need to rename ID for multiqc
     shell:
@@ -313,17 +217,17 @@ rule calls_stats:
         "--threads {threads} "
         "2> {log} "
         "{input} | "
-        "sed \"s|{input}|$(echo {input} | cut -d '/' -f 6 | cut -d '.' -f 1).{wildcards.tool}|g\" "
+        "sed 's|{input}|{wildcards.sample}|g' "
         "> {output} "
 
 
 rule calls_index:
     input:
-        "data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf",
+        "{sample}.bcf",
     output:
-        "data/hg38.bcf.d/{tool}/{mol}/{fna}/{sample}/{sample}.bcf.csi",
+        "{sample}.bcf.csi",
     log:
-        "logs/hg38.bcf/{tool}/{mol}/{fna}/{sample}/index.log",
+        "logs/calling/{sample}/index.log",
     threads: 5
     shell:
         "bcftools index "
@@ -336,11 +240,11 @@ rule calls_index:
 
 rule filter_mapping:
     input:
-        "data/hisat/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "{sample}.bam",
     output:
-        "data/mapping.filtered/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "{sample}.filtered.bam",
     log:
-        "logs/mapping.filtered/mapping/{mol}/{fna}/{sample}/{sample}.log",
+        "logs/mapping.filtered/{sample}.log",
     params:
         required=branch(
             evaluate(f"{{sample}} in {list(PAIRED)}"),
@@ -445,16 +349,16 @@ rule hisat2_build:
 
 rule trimmomatic_pe:
     input:
-        fi="data/orig/{mol}/{sample}_1.fastq.gz",
-        ri="data/orig/{mol}/{sample}_2.fastq.gz",
+        fi="data/{sample}_1.fastq.gz",
+        ri="data/{sample}_2.fastq.gz",
     output:
-        fpo="data/trim/{mol}/{sample}/{sample}.fp.fastq.gz",
-        fuo="data/trim/{mol}/{sample}/{sample}.fu.fastq.gz",
-        rpo="data/trim/{mol}/{sample}/{sample}.rp.fastq.gz",
-        ruo="data/trim/{mol}/{sample}/{sample}.ru.fastq.gz",
+        fpo="data/{sample}.fp.fastq.gz",
+        fuo="data/{sample}.fu.fastq.gz",
+        rpo="data/{sample}.rp.fastq.gz",
+        ruo="data/{sample}.ru.fastq.gz",
     log:
-        stdout="logs/trim/{mol}/{sample}/{sample}.stdout.log",
-        stderr="logs/trim/{mol}/{sample}/{sample}.stderr.log",
+        stdout="logs/{sample}.trimmomatic.pe.stdout.log",
+        stderr="logs/{sample}.trimmomatic.pe.stderr.log",
     threads: 10
     resources:
         mem_mb=1024,
@@ -472,12 +376,12 @@ rule trimmomatic_pe:
 
 rule trimmomatic_se:
     input:
-        "data/orig/{mol}/{sample}.fastq.gz",
+        "data/{sample}.fastq.gz",
     output:
-        "data/trim/{mol}/{sample}/{sample}.se.fastq.gz",
+        "data/{sample}.se.fastq.gz",
     log:
-        stdout="logs/trim/{mol}/{sample}/{sample}.stdout.log",
-        stderr="logs/trim/{mol}/{sample}/{sample}.stderr.log",
+        stdout="logs/{sample}.trimmomatic.se.stdout.log",
+        stderr="logs/{sample}.trimmomatic.se.stderr.log",
     threads: 5
     resources:
         mem_mb=1024,
@@ -495,19 +399,21 @@ rule trimmomatic_se:
 rule hisat2_refmap:
     input:
         *[f"data/hisat/index/{{fna}}/index.{i}.ht2" for i in range(1, 9)],
-        fw="data/trim/{mol}/{sample}/{sample}.fp.fastq.gz",
-        rv="data/trim/{mol}/{sample}/{sample}.rp.fastq.gz",
+        fw="{sample_dir}/{sample}.fp.fastq.gz",
+        rv="{sample_dir}/{sample}.rp.fastq.gz",
     output:
-        met="data/hisat/mapping/{mol}/{fna}/{sample}/metrics.txt",
-        sum="data/hisat/mapping/{mol}/{fna}/{sample}/{sample}.txt",
-        bam="data/hisat/mapping/{mol}/{fna}/{sample}/{sample}.bam",
-        samsorttmp=temp(directory("data/samtools.sort.tmp.d/{mol}.{fna}.{sample}.d/")),
+        met="{sample_dir}/{fna}/{sample}.hisat_metrics.txt",
+        sum="{sample_dir}/{fna}/{sample}.txt",
+        bam="{sample_dir}/{fna}/{sample}.bam",
+        samsorttmp=temp(
+            directory("data/samtools.sort.tmp.d/{sample_dir}/{fna}.{sample}.d/")
+        ),
     threads: 20
     resources:
         mem_mb=1024,
     log:
-        stderr="logs/hisat/mapping/{mol}/{fna}/{sample}/stderr.log",
-        samsort="logs/hisat/mapping/{mol}/{fna}/{sample}/samsort.stderr.log",
+        stderr="logs/hisat/mapping/{sample_dir}/{fna}/{sample}/stderr.log",
+        samsort="logs/hisat/mapping/{sample_dir}/{fna}/{sample}/samsort.stderr.log",
     shell:
         "mkdir -p {output.samsorttmp} && "
         "hisat2 "
@@ -532,18 +438,20 @@ rule hisat2_refmap:
 rule hisat2_refmap_unpaired:
     input:
         *[f"data/hisat/index/{{fna}}/index.{i}.ht2" for i in range(1, 9)],
-        read="data/trim/{mol}/{sample}/{sample}.se.fastq.gz",
+        read="{sample_dir}/{sample}.se.fastq.gz",
     output:
-        met="data/hisat/mapping/{mol}/{fna}/{sample}/metrics.txt",
-        sum="data/hisat/mapping/{mol}/{fna}/{sample}/{sample}.txt",
-        bam="data/hisat/mapping/{mol}/{fna}/{sample}/{sample}.bam",
-        samsorttmp=temp(directory("data/samtools.sort.tmp.d/{mol}.{fna}.{sample}.d/")),
+        met="{sample_dir}/{fna}/{sample}.hisat_metrics.txt",
+        sum="{sample_dir}/{fna}/{sample}.txt",
+        bam="{sample_dir}/{fna}/{sample}.bam",
+        samsorttmp=temp(
+            directory("data/samtools.sort.tmp.d/{sample_dir}/{fna}.{sample}.d/")
+        ),
     threads: 20
     resources:
         mem_mb=1024,
     log:
-        stderr="logs/hisat/mapping/{mol}/{fna}/{sample}/stderr.log",
-        samsort="logs/hisat/mapping/{mol}/{fna}/{sample}/samsort.stderr.log",
+        stderr="logs/hisat/mapping/{sample_dir}/{fna}/{sample}/stderr.log",
+        samsort="logs/hisat/mapping/{sample_dir}/{fna}/{sample}/samsort.stderr.log",
     shell:
         "mkdir -p {output.samsorttmp} && "
         "hisat2 "
@@ -565,12 +473,12 @@ rule hisat2_refmap_unpaired:
 
 rule hisat2_refmap_samindex:
     input:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "data/{sample}.bam",
     output:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam.bai",
+        "data/{sample}.bam.bai",
     threads: 5
     log:
-        "logs/{tool}/mapping/{mol}/{fna}/{sample}/samindex.stderr.log",
+        "logs/{sample}/samindex.stderr.log",
     shell:
         "samtools index "
         "2> {log} "
@@ -581,12 +489,12 @@ rule hisat2_refmap_samindex:
 
 rule hisat2_refmap_samstats:
     input:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "data/{sample}.bam",
     output:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.{tool}.samstats",
+        "data/{sample}.samstats",
     threads: 5
     log:
-        "logs/{tool}/mapping/{mol}/{fna}/{sample}/samstats.stderr.log",
+        "logs/{sample}/samstats.stderr.log",
     shell:
         "samtools stats "
         "2> {log} "
@@ -597,12 +505,12 @@ rule hisat2_refmap_samstats:
 
 rule hisat2_refmap_flagstat:
     input:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "data/{sample}.bam",
     output:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.{tool}.flagstat",
+        "data/{sample}.flagstat",
     threads: 5
     log:
-        "logs/{tool}/mapping/{mol}/{fna}/{sample}/flagstat.stderr.log",
+        "logs/{sample}/flagstat.stderr.log",
     shell:
         "samtools flagstat "
         "2> {log} "
@@ -613,12 +521,12 @@ rule hisat2_refmap_flagstat:
 
 rule hisat2_refmap_bamstats:
     input:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.bam",
+        "data/{sample}.bam",
     output:
-        "data/{tool}/mapping/{mol}/{fna}/{sample}/{sample}.{tool}.bamstats",
+        "data/{sample}.bamstats",
     threads: 1
     log:
-        "logs/{tool}/mapping/{mol}/{fna}/{sample}/bamstats.stderr.log",
+        "logs/{sample}/bamstats.stderr.log",
     shell:
         "bamtools stats "
         "2> {log} "
@@ -626,18 +534,52 @@ rule hisat2_refmap_bamstats:
         "-in {input}"
 
 
+rule split_paired_reads_into_dirs:
+    input:
+        "{sample_dir}/{sample}_{sfx}.fastq.gz",
+    output:
+        "{sample_dir}/{sample}/{sample}_{sfx}.fastq.gz",
+    log:
+        stdout="logs/split/{sample_dir}/{sample}_{sfx}/stdout.log",
+        stderr="logs/split/{sample_dir}/{sample}_{sfx}/stderr.log",
+    shell:
+        "mkdir "
+        "> {log.stdout} 2> {log.stderr} "
+        "-p $(dirname {output}) && "
+        "cp "
+        "> {log.stdout} 2> {log.stderr} "
+        "{input} {output}"
+
+
+rule split_unpaired_reads_into_dirs:
+    input:
+        "{sample_dir}/{sample}.fastq.gz",
+    output:
+        "{sample_dir}/{sample}/{sample}.fastq.gz",
+    log:
+        stdout="logs/split/{sample_dir}/{sample}/stdout.log",
+        stderr="logs/split/{sample_dir}/{sample}/stderr.log",
+    shell:
+        "mkdir "
+        "> {log.stdout} 2> {log.stderr} "
+        "-p $(dirname {output}) && "
+        "cp "
+        "> {log.stdout} 2> {log.stderr} "
+        "{input} {output}"
+
+
 rule fastqc:
     input:
-        "data/{src}/{mol}/{sample}.fastq.gz",
+        "data/{sample}.fastq.gz",
     output:
-        html="data/qc/fastqc/{src}/{mol}/{sample}_fastqc.html",
+        html="data/{sample}_fastqc.html",
         # the suffix _fastqc.zip is necessary for multiqc to find the file
-        zip="data/qc/fastqc/{src}/{mol}/{sample}_fastqc.zip",
+        zip="data/{sample}_fastqc.zip",
     params:
         extra="--quiet",
     log:
-        "logs/fastqc/{src}/{mol}/{sample}.log",
-    threads: 5
+        "logs/{sample}.log",
+    threads: 20
     resources:
         mem_mb=1024,
     wrapper:
@@ -646,109 +588,92 @@ rule fastqc:
 
 rule multiqc:
     input:
+        # dna
         expand(
-            "data/qc/fastqc/orig/dna_reads/{sample}_fastqc.zip",
-            sample=SAMPLES,
+            "data/orig/dna_reads/{sample}/{sample}_{mate}_fastqc.{ext}",
+            sample=SAMPLEIDS,
+            mate=["1", "2"],
+            ext=["zip", "html"],
         ),
         expand(
-            "data/qc/fastqc/trim/dna_reads/{sample}/{sample}.{dir}{pair}_fastqc.zip",
+            "data/orig/dna_reads/{sample}/{sample}.{dir}{pair}{ext}",
             sample=SAMPLEIDS,
             dir=["f", "r"],
             pair=["p", "u"],
+            ext=[
+                ".fastq.gz",
+                "_fastqc.zip",
+                "_fastqc.html",
+            ],
         ),
         expand(
-            "data/qc/fastqc/trim/rna_reads/{sample}/{sample}.se_fastqc.zip",
-            sample=RNAs,
-        ),
-        expand(
-            "data/qc/fastqc/orig/rna_reads/{sample}_fastqc.zip",
-            sample=RNAs,
-        ),
-        expand(
-            "logs/trim/dna_reads/{sample}/{sample}.{std}.log",
-            std=["stdout", "stderr"],
+            f"data/orig/dna_reads/{{sample}}/{HG38FNA}/{{sample}}.{{tool}}",
             sample=SAMPLEIDS,
+            tool=[
+                "hisat_metrics.txt",
+                "txt",
+            ],
         ),
         expand(
-            "logs/trim/rna_reads/{sample}/{sample}.{std}.log",
-            std=["stdout", "stderr"],
-            sample=RNAs,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.txt",
+            f"data/orig/dna_reads/{{sample}}/{HG38FNA}/{{sample}}{{filter}}.{{tool}}",
             sample=SAMPLEIDS,
+            filter=[
+                "",
+                ".filtered",
+            ],
+            tool=[
+                "bam",
+                "bam.bai",
+                "flagstat",
+                "samstats",
+                "bamstats",
+                "bcf",
+                "bcfstats",
+                "vcf",
+                "vep.html",
+            ],
         ),
+        # rna
         expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.flagstat",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.samstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hisat/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.bamstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.txt",
+            "data/orig/rna_reads/{sample}/{sample}_fastqc.{ext}",
             sample=RNAs,
+            ext=["zip", "html"],
         ),
         expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.flagstat",
+            "data/orig/rna_reads/{sample}/{sample}.se{ext}",
             sample=RNAs,
+            ext=[
+                ".fastq.gz",
+                "_fastqc.zip",
+                "_fastqc.html",
+            ],
         ),
         expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.samstats",
+            "data/orig/rna_reads/{sample}/rna.fna/{sample}.{tool}",
             sample=RNAs,
+            tool=[
+                "hisat_metrics.txt",
+                "txt",
+            ],
         ),
         expand(
-            "data/hisat/mapping/rna_reads/rna.fna/{sample}/{sample}.hisat.bamstats",
+            "data/orig/rna_reads/{sample}/rna.fna/{sample}{filter}.{tool}",
             sample=RNAs,
-        ),
-        expand(
-            f"data/hg38.bcf.d/hisat/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.hisat.bcfstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            "data/hg38.bcf.d/hisat/rna_reads/rna.fna/{sample}/{sample}.hisat.bcfstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.flagstat",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.samstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/mapping.filtered/mapping/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.bamstats",
-            sample=RNAs,
-        ),
-        expand(
-            "data/hg38.bcf.d/mapping.filtered/rna_reads/rna.fna/{sample}/{sample}.mapping.filtered.bcfstats",
-            sample=RNAs,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.flagstat",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.samstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/mapping.filtered/mapping/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.bamstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/hg38.bcf.d/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.mapping.filtered.bcfstats",
-            sample=SAMPLEIDS,
-        ),
-        expand(
-            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}/{{sample}}.vep.html",
-            sample=SAMPLEIDS,
+            filter=[
+                "",
+                ".filtered",
+            ],
+            tool=[
+                "bam",
+                "bam.bai",
+                "flagstat",
+                "samstats",
+                "bamstats",
+                "bcf",
+                "bcfstats",
+                "vcf",
+                "vep.html",
+            ],
         ),
     output:
         "data/qc/multiqc/multiqc_report.html",
@@ -758,38 +683,12 @@ rule multiqc:
         stdout="logs/multiqc/stdout.log",
         stderr="logs/multiqc/stderr.log",
     params:
-        fqc_dna=expand(
-            "data/qc/fastqc/trim/dna_reads/{sample}",
-            sample=SAMPLEIDS,
-        ),
-        fqc_rna=expand(
-            "data/qc/fastqc/trim/rna_reads/{sample}",
-            sample=RNAs,
-        ),
-        refmap_dna=expand(
-            f"data/{{tool}}/mapping/dna_reads/{HG38FNA}/{{sample}}",
-            tool=["hisat", "mapping.filtered"],
-            sample=sorted(SAMPLEIDS),
-        ),
-        refmap_rna=expand(
-            "data/{tool}/mapping/rna_reads/rna.fna/{sample}",
-            tool=["hisat", "mapping.filtered"],
-            sample=sorted(RNAs),
-        ),
-        bcf_dna=expand(
-            f"data/hg38.bcf.d/{{tool}}/dna_reads/{HG38FNA}/{{sample}}",
-            tool=["hisat", "mapping.filtered"],
-            sample=sorted(SAMPLEIDS),
-        ),
-        bcf_rna=expand(
-            "data/hg38.bcf.d/{tool}/rna_reads/rna.fna/{sample}",
-            tool=["hisat", "mapping.filtered"],
-            sample=sorted(RNAs),
-        ),
-        vep=expand(
-            f"data/vep/mapping.filtered/dna_reads/{HG38FNA}/{{sample}}",
-            sample=SAMPLEIDS,
-        ),
+        dnas=expand("data/orig/dna_reads/{sample}", sample=SAMPLEIDS),
+        dna_stats=expand(f"data/orig/dna_reads/{{sample}}/{HG38FNA}", sample=SAMPLEIDS),
+        dna_trims=expand("logs/orig/dna_reads/{sample}", sample=SAMPLEIDS),
+        rnas=expand("data/orig/rna_reads/{sample}", sample=RNAs),
+        rna_stats=expand("data/orig/rna_reads/{sample}/rna.fna", sample=RNAs),
+        rna_trims=expand("logs/orig/rna_reads/{sample}", sample=RNAs),
     shell:
         "multiqc "
         "> {log.stdout} "
@@ -799,14 +698,9 @@ rule multiqc:
         "--export "
         "--no-megaqc-upload "
         "--outdir data/qc/multiqc/ "
-        "data/qc/fastqc/orig/dna_reads "
-        "data/qc/fastqc/orig/rna_reads "
-        "{params.fqc_dna} "
-        "{params.fqc_rna} "
-        "logs/trim/dna_reads "
-        "logs/trim/rna_reads "
-        "{params.bcf_dna} "
-        "{params.bcf_rna} "
-        "{params.refmap_dna} "
-        "{params.refmap_rna} "
-        "{params.vep} "
+        "{params.dna_trims} "
+        "{params.dnas} "
+        "{params.dna_stats} "
+        "{params.rna_trims} "
+        "{params.rnas} "
+        "{params.rna_stats} "
