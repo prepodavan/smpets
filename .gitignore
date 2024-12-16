@@ -5,3 +5,4 @@ __pycache__/
 .snakemake/
 .netrc
 .DS_Store
+snakemake.yml

@@ -1,17 +1,14 @@
-import pathlib as pl
+include: "common.smk"
 
 
-HG38ACC = "GCF_000001405.40"
-HG38FNA = "GCF_000001405.40_GRCh38.p14_genomic.fna"
-SAMPLES = [
-    f.name.replace(".fastq.gz", "")
-    for f in pl.Path("data/orig/dna_reads").glob("*.fastq.gz")
-]
-RNAs = [
-    f.name.replace(".fastq.gz", "")
-    for f in pl.Path("data/orig/rna_reads").glob("*.fastq.gz")
-]
-SAMPLEIDS = set([s[:-2] for s in SAMPLES])
+configfile: "snakemake.yml"
+
+
+HG38ACC = config["reference"]["acc"]
+HG38FNA = config["reference"]["filename"]
+SAMPLES = list(sorted(config["samples"]["dna"]["names"]))
+SAMPLEIDS = list(sorted(config["samples"]["dna"]["ids"]))
+RNAs = list(sorted(config["samples"]["rna"]["names"]))
 PAIRED = SAMPLEIDS
 
 
@@ -183,6 +180,8 @@ rule calling:
         callerr="logs/calling/{sample_dir}/{fna}/{sample}/calls.log",
         filter="logs/calling/{sample_dir}/{fna}/{sample}/filter.log",
     threads: 5
+    params:
+        include=calling_filters,
     shell:
         "mkdir -p data/hg38.bcf.d && "
         "bcftools mpileup "
@@ -199,7 +198,7 @@ rule calling:
         "bcftools filter "
         "2> {log.filter} "
         "--threads {threads} "
-        "--include 'QUAL>30 && DP>50' "
+        "--include '{params.include}' "
         "--output {output} "
 
 
@@ -362,6 +361,8 @@ rule trimmomatic_pe:
     threads: 10
     resources:
         mem_mb=1024,
+    params:
+        trimmer=trimmomatic_pe_filters,
     shell:
         "trimmomatic PE "
         "> {log.stdout} "
@@ -371,7 +372,7 @@ rule trimmomatic_pe:
         "{input.fi} {input.ri} "
         "{output.fpo} {output.fuo} "
         "{output.rpo} {output.ruo} "
-        "TRAILING:20 MINLEN:50"
+        "{params.trimmer}"
 
 
 rule trimmomatic_se:
@@ -385,6 +386,8 @@ rule trimmomatic_se:
     threads: 5
     resources:
         mem_mb=1024,
+    params:
+        trimmer=trimmomatic_se_filters,
     shell:
         "trimmomatic SE "
         "> {log.stdout} "
@@ -393,7 +396,7 @@ rule trimmomatic_se:
         "-threads {threads} "
         "{input} "
         "{output} "
-        "TRAILING:20 MINLEN:50"
+        "{params.trimmer}"
 
 
 rule hisat2_refmap:
